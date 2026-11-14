@@ -50,7 +50,6 @@ const CalendarHeatmap = () => {
     return '#27272A';
   };
 
-  // month labels positioned at the first column of each new month
   const monthLabels = [];
   let lastMonth = -1;
   for (let c = 0; c < COLS; c++) {

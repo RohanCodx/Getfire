@@ -7,7 +7,7 @@ const MapController = ({ selectedFire }) => {
   const map = useMap();
   useEffect(() => {
     if (selectedFire && selectedFire.lat && selectedFire.lng) {
-      map.flyTo([selectedFire.lat, selectedFire.lng], 10, { duration: 1.5 });
+      map.flyTo([selectedFire.lat, selectedFire.lng], 5, { duration: 1.5 });
     }
   }, [selectedFire, map]);
   return null;
@@ -29,7 +29,7 @@ const LocateControl = ({ onToast }) => {
   const map = useMap();
   const handleLocate = (e) => {
     e.stopPropagation();
-    map.locate({ setView: true, maxZoom: 10 });
+    map.locate({ setView: true, maxZoom: 6 });
     map.once('locationfound', (ev) => {
       L.circleMarker(ev.latlng, {
         radius: 8, color: '#10B981', fillColor: '#10B981', fillOpacity: 0.8, weight: 3,
@@ -63,6 +63,7 @@ const MapComponent = ({ fires, selectedFire, mapStyle, onToast }) => {
       style={{ height: '100%', width: '100%' }}
       zoomControl={false}
       preferCanvas={true}
+      className={`map-${mapStyle}`}
     >
       {mapStyle === 'dark' && (
         <TileLayer
