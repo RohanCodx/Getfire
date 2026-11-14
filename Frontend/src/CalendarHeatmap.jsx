@@ -28,31 +28,44 @@ const CalendarHeatmap = () => {
     if (intensity > 60) return '#F97316'; 
     if (intensity > 40) return '#C026D3'; 
     if (intensity > 20) return '#581C87'; 
-    if (intensity > 0)  return '#1F2937'; 
-    return '#111827';                     
+    if (intensity > 0)  return '#27272A'; 
+    return '#18181B';                     
   };
 
   return (
-    <div style={{ marginTop: '1.5rem', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center' }}>
+      
+      {/* Responsive grid: repeat(53, 1fr) ensures it never overflows horizontally */}
       <div style={{ 
         display: 'grid', 
-        gridTemplateRows: 'repeat(7, 10px)', // Tighter squares
-        gridAutoFlow: 'column', 
-        gridAutoColumns: '10px', 
-        gap: '3px' 
+        gridTemplateColumns: 'repeat(53, 1fr)', 
+        gridTemplateRows: 'repeat(7, 1fr)', 
+        gridAutoFlow: 'column',
+        gap: '3px',
+        width: '100%',
+        height: '90px', // Fixed height so the squares stay square
+        marginBottom: '1rem'
       }}>
         {calendarData.map((intensity, i) => (
-          <div key={i} title={`Activity: ${intensity}`} style={{ backgroundColor: getColor(intensity), borderRadius: '2px' }} />
+          <div 
+            key={i} 
+            title={`Activity: ${intensity}`} 
+            style={{ 
+              backgroundColor: getColor(intensity), 
+              borderRadius: '2px',
+              aspectRatio: '1' // Forces the cell to stay square
+            }} 
+          />
         ))}
       </div>
       
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '15px', fontSize: '0.65rem', color: '#6B7280', fontWeight: '700', letterSpacing: '1px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '0.65rem', color: '#A1A1AA', fontWeight: '700', letterSpacing: '1px' }}>
         <span>JAN</span><span>APR</span><span>JUL</span><span>OCT</span><span>DEC</span>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', marginTop: '20px', fontSize: '0.65rem', color: '#6B7280', fontWeight: '600' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', width: '100%', gap: '8px', marginTop: '1rem', fontSize: '0.7rem', color: '#A1A1AA', fontWeight: '600' }}>
         <span>Low Activity</span>
-        <div style={{ width: '10px', height: '10px', backgroundColor: '#111827', borderRadius: '2px' }}></div>
+        <div style={{ width: '10px', height: '10px', backgroundColor: '#18181B', borderRadius: '2px' }}></div>
         <div style={{ width: '10px', height: '10px', backgroundColor: '#581C87', borderRadius: '2px' }}></div>
         <div style={{ width: '10px', height: '10px', backgroundColor: '#C026D3', borderRadius: '2px' }}></div>
         <div style={{ width: '10px', height: '10px', backgroundColor: '#F97316', borderRadius: '2px' }}></div>

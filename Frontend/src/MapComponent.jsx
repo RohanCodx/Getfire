@@ -6,7 +6,9 @@ import 'leaflet/dist/leaflet.css';
 const MapController = ({ selectedFire }) => {
   const map = useMap();
   useEffect(() => {
-    if (selectedFire) map.flyTo([selectedFire.lat, selectedFire.lng], 7, { duration: 1.5 });
+    if (selectedFire) {
+      map.flyTo([selectedFire.lat, selectedFire.lng], 6, { duration: 1.5 });
+    }
   }, [selectedFire, map]);
   return null;
 };
@@ -15,7 +17,10 @@ const MapResizer = () => {
   const map = useMap();
   useEffect(() => {
     const observer = new ResizeObserver(() => {
-      map.invalidateSize();
+      // Delay to allow CSS transitions to finish
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 350);
     });
     observer.observe(map.getContainer().parentNode);
     return () => observer.disconnect();
@@ -30,11 +35,7 @@ const LocateControl = () => {
     map.locate({ setView: true, maxZoom: 8 });
     map.on('locationfound', (e) => {
       L.circleMarker(e.latlng, {
-        radius: 8,
-        color: '#3B82F6',
-        fillColor: '#3B82F6',
-        fillOpacity: 0.8,
-        weight: 3
+        radius: 8, color: '#3B82F6', fillColor: '#3B82F6', fillOpacity: 0.8, weight: 3
       }).addTo(map).bindPopup("You are here").openPopup();
     });
     map.on('locationerror', () => {
@@ -48,7 +49,7 @@ const LocateControl = () => {
       onClick={handleLocate}
       title="Find my location"
     >
-      <span style={{ fontSize: '1.2rem' }}>🎯</span>
+      <span style={{ fontSize: '1.2rem' }}>Target</span>
     </div>
   );
 };

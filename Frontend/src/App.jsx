@@ -17,13 +17,21 @@ const fallbackFires = [
 
 const fallbackStats = { total_observations: 5120, modis_observations: 2301, viirs_observations: 2819 };
 
+const getSeverity = (frp) => {
+  const power = parseFloat(frp);
+  if (power > 50) return { label: 'EXTREME', color: '#FF0000' };
+  if (power > 20) return { label: 'HIGH', color: '#FF6B35' };
+  if (power > 10) return { label: 'MODERATE', color: '#FFD700' };
+  return { label: 'LOW', color: '#00B4D8' };
+};
+
 function App() {
-  // State
   const [isAppOpen, setIsAppOpen] = useState(false);
   const [activeView, setActiveView] = useState('map');
   const [activeSensor, setActiveSensor] = useState('Harmonized');
   const [selectedFire, setSelectedFire] = useState(null);
   const [mapStyle, setMapStyle] = useState('dark'); 
+  
   const [showLeft, setShowLeft] = useState(true);
   const [showRight, setShowRight] = useState(true);
   
@@ -34,7 +42,6 @@ function App() {
   const [sortBy, setSortBy] = useState('frp');
   const [confidenceThreshold, setConfidenceThreshold] = useState(0);
   
-  // Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
 
@@ -57,7 +64,6 @@ function App() {
     setIsSearching(false);
   };
 
-  // Auto-geocode missing location names
   const autoGeocode = async (firesArray) => {
     for (let i = 0; i < Math.min(5, firesArray.length); i++) {
       const fire = firesArray[i];
@@ -74,7 +80,6 @@ function App() {
     }
   };
 
-  // Fetch data
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/v1/summary`)
       .then(res => res.json())
@@ -116,7 +121,6 @@ function App() {
       .catch(() => console.warn("Backend offline. Using demo fires."));
   }, []);
 
-  // Filter and sort
   const sourceData = liveFires.length > 0 ? liveFires : fallbackFires;
   const displayStats = isLive ? stats : fallbackStats;
   
@@ -175,6 +179,9 @@ function App() {
               {showRight ? '[ > ]' : '[ < ]'}
             </button>
           )}
+          <span style={{ fontSize: '0.65rem', color: '#6B7280', marginLeft: '10px', fontFamily: 'JetBrains Mono' }}>
+            SYNC: {stats.latest_successful_sync_utc ? new Date(stats.latest_successful_sync_utc).toLocaleTimeString() : 'OFFLINE'}
+          </span>
           <span className={`status-dot ${isLive ? 'live' : 'demo'}`}></span>
           {isLive ? 'SYSTEM ONLINE' : 'DEMO MODE'}
         </div>
@@ -183,7 +190,6 @@ function App() {
       <div className="main-content">
         <aside className={`sidebar hud-panel ${showLeft ? 'open' : 'closed'}`}>
           
-          {/* Search Section */}
           <div className="sidebar-section">
             <h3>REGION SEARCH</h3>
             <form onSubmit={handleSearch} style={{ display: 'flex', gap: '8px', minWidth: '250px' }}>
@@ -200,7 +206,6 @@ function App() {
             </form>
           </div>
 
-          {/* Confidence Slider */}
           <div className="sidebar-section">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h3 style={{ margin: 0 }}>CONFIDENCE THRESHOLD</h3>
@@ -220,26 +225,30 @@ function App() {
             </div>
           </div>
 
-          {/* Mission Stats */}
           <div className="sidebar-section">
             <h3>MISSION STATS</h3>
             <div className="stat-grid">
               <div className="stat-box">
-                <span className="stat-label">TOTAL</span>
+                <span className="stat-label">TOTAL OBS</span>
                 <span className="stat-value">{displayStats.total_observations.toLocaleString()}</span>
               </div>
               <div className="stat-box">
-                <span className="stat-label">MODIS</span>
+                <span className="stat-label">TOTAL FRP (MW)</span>
+                <span className="stat-value text-orange">
+                  {((displayStats.modis_frp_mw_total || 45210) + (displayStats.viirs_frp_mw_total || 38012)).toLocaleString()}
+                </span>
+              </div>
+              <div className="stat-box">
+                <span className="stat-label">MODIS DETECT</span>
                 <span className="stat-value text-orange">{displayStats.modis_observations.toLocaleString()}</span>
               </div>
               <div className="stat-box">
-                <span className="stat-label">VIIRS</span>
+                <span className="stat-label">VIIRS DETECT</span>
                 <span className="stat-value text-cyan">{displayStats.viirs_observations.toLocaleString()}</span>
               </div>
             </div>
           </div>
 
-          {/* Sensor Filter */}
           <div className="sidebar-section">
             <h3>SENSOR FILTER</h3>
             <div className="sensor-toggles">
@@ -251,7 +260,6 @@ function App() {
             </div>
           </div>
 
-          {/* Map Controls */}
           <div className="sidebar-section">
             <h3>MAP CONTROLS</h3>
             <button className="map-toggle-btn" onClick={() => setMapStyle(mapStyle === 'dark' ? 'satellite' : 'dark')}>
@@ -345,7 +353,7 @@ function App() {
             <div className="fire-list">
               {filteredFires.length === 0 ? (
                 <div className="empty-state">
-                  <div style={{ fontSize: '1.5rem', marginBottom: '10px' }}>📡</div>
+                  <div style={{ fontSize: '1.5rem', marginBottom: '10px' }}>!</div>
                   <div>No hotspots detected for this filter.</div>
                 </div>
               ) : (
@@ -366,6 +374,9 @@ function App() {
                       >
                         COPY
                       </button>
+                    </div>
+                    <div style={{ fontSize: '0.65rem', fontWeight: 'bold', color: getSeverity(fire.frp).color, marginBottom: '4px' }}>
+                      SEVERITY: {getSeverity(fire.frp).label}
                     </div>
 
                     <div className="card-bottom" style={{ paddingTop: '6px' }}>
