@@ -1,76 +1,96 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { API_BASE_URL } from './config';
 
-const CalendarHeatmap = () => {
-  const [calendarData, setCalendarData] = useState(() => 
-    Array.from({ length: 365 }, () => Math.floor(Math.random() * 100))
-  );
+const DAYS = 365;
+const COLS = Math.ceil(DAYS / 7);
+const fmt = (d) => d.toISOString().slice(0, 10);
 
-  useEffect(() => {
-    fetch(`${API_BASE_URL}/api/v1/calendar?west=-150&south=-60&east=150&north=70&start_date=2026-11-01&end_date=2026-11-14`)
-      .then(res => res.json())
-      .then(data => {
-        const daysArray = data.days || data; 
-        if (Array.isArray(daysArray) && daysArray.length > 0) {
-          const newCalendar = Array.from({ length: 365 }, () => 0);
-          daysArray.forEach((item, index) => {
-            let count = typeof item === 'number' ? item : (item.hotspot_count || Math.floor(Math.random() * 80) + 20);
-            newCalendar[365 - daysArray.length + index] = count;
-          });
-          setCalendarData(newCalendar);
-        }
-      })
-      .catch(() => console.warn("Using simulated calendar data."));
+const CalendarHeatmap = () => {
+  const [counts, setCounts] = useState(() => Array(DAYS).fill(0));
+  const [hasData, setHasData] = useState(false);
+
+  const dates = useMemo(() => {
+    const end = new Date();
+    return Array.from({ length: DAYS }, (_, i) => {
+      const d = new Date(end);
+      d.setDate(end.getDate() - (DAYS - 1 - i));
+      return d;
+    });
   }, []);
 
-  const getColor = (intensity) => {
-    if (intensity > 80) return '#FDE047'; 
-    if (intensity > 60) return '#F97316'; 
-    if (intensity > 40) return '#C026D3'; 
-    if (intensity > 20) return '#581C87'; 
-    if (intensity > 0)  return '#27272A'; 
-    return '#18181B';                     
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/v1/calendar?west=-180&south=-90&east=180&north=90&start_date=${fmt(dates[0])}&end_date=${fmt(dates[DAYS - 1])}`)
+      .then(res => { if (!res.ok) throw new Error(res.status); return res.json(); })
+      .then(data => {
+        const arr = data.days || data;
+        if (!Array.isArray(arr) || arr.length === 0) return;
+        const next = Array(DAYS).fill(0);
+        const indexByDate = new Map(dates.map((d, i) => [fmt(d), i]));
+        arr.forEach((item, idx) => {
+          const count = typeof item === 'number' ? item : (item.hotspot_count || 0);
+          const dateKey = item && item.date ? String(item.date).slice(0, 10) : null;
+          const pos = dateKey && indexByDate.has(dateKey) ? indexByDate.get(dateKey) : DAYS - arr.length + idx;
+          if (pos >= 0 && pos < DAYS) next[pos] = count;
+        });
+        setCounts(next);
+        setHasData(true);
+      })
+      .catch(() => console.warn('Calendar data unavailable.'));
+  }, [dates]);
+
+  const max = Math.max(...counts, 1);
+
+  const getColor = (count) => {
+    const p = (count / max) * 100;
+    if (count === 0) return '#18181B';
+    if (p > 80) return '#FDE047';
+    if (p > 60) return '#F97316';
+    if (p > 40) return '#C026D3';
+    if (p > 20) return '#581C87';
+    return '#27272A';
   };
+
+  // month labels positioned at the first column of each new month
+  const monthLabels = [];
+  let lastMonth = -1;
+  for (let c = 0; c < COLS; c++) {
+    const d = dates[c * 7];
+    if (d && d.getMonth() !== lastMonth) {
+      monthLabels.push({ c, label: d.toLocaleString('en', { month: 'short' }).toUpperCase() });
+      lastMonth = d.getMonth();
+    }
+  }
 
   return (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center' }}>
-      
-      {/* Responsive grid: repeat(53, 1fr) ensures it never overflows horizontally */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(53, 1fr)', 
-        gridTemplateRows: 'repeat(7, 1fr)', 
-        gridAutoFlow: 'column',
-        gap: '3px',
-        width: '100%',
-        height: '90px', // Fixed height so the squares stay square
-        marginBottom: '1rem'
+      <div style={{
+        display: 'grid', gridTemplateColumns: `repeat(${COLS}, 1fr)`, gridTemplateRows: 'repeat(7, 1fr)',
+        gridAutoFlow: 'column', gap: '4px', width: '100%', height: '110px', marginBottom: '0.5rem',
       }}>
-        {calendarData.map((intensity, i) => (
-          <div 
-            key={i} 
-            title={`Activity: ${intensity}`} 
-            style={{ 
-              backgroundColor: getColor(intensity), 
-              borderRadius: '2px',
-              aspectRatio: '1' // Forces the cell to stay square
-            }} 
+        {counts.map((count, i) => (
+          <div
+            key={i}
+            title={`${fmt(dates[i])}: ${count.toLocaleString()} hotspots`}
+            style={{ backgroundColor: getColor(count), borderRadius: '2px', aspectRatio: '1' }}
           />
         ))}
       </div>
-      
-      <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '0.65rem', color: '#A1A1AA', fontWeight: '700', letterSpacing: '1px' }}>
-        <span>JAN</span><span>APR</span><span>JUL</span><span>OCT</span><span>DEC</span>
+
+      <div style={{ position: 'relative', height: '16px', width: '100%', fontSize: '0.7rem', color: '#A1A1AA', fontWeight: 600 }}>
+        {monthLabels.map(m => (
+          <span key={m.c} style={{ position: 'absolute', left: `${(m.c / COLS) * 100}%` }}>{m.label}</span>
+        ))}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', width: '100%', gap: '8px', marginTop: '1rem', fontSize: '0.7rem', color: '#A1A1AA', fontWeight: '600' }}>
-        <span>Low Activity</span>
-        <div style={{ width: '10px', height: '10px', backgroundColor: '#18181B', borderRadius: '2px' }}></div>
-        <div style={{ width: '10px', height: '10px', backgroundColor: '#581C87', borderRadius: '2px' }}></div>
-        <div style={{ width: '10px', height: '10px', backgroundColor: '#C026D3', borderRadius: '2px' }}></div>
-        <div style={{ width: '10px', height: '10px', backgroundColor: '#F97316', borderRadius: '2px' }}></div>
-        <div style={{ width: '10px', height: '10px', backgroundColor: '#FDE047', borderRadius: '2px' }}></div>
-        <span>Extreme</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: '1rem', fontSize: '0.7rem', color: '#A1A1AA' }}>
+        <span>{hasData ? '' : 'No data – backend offline'}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span>Low</span>
+          {['#18181B', '#581C87', '#C026D3', '#F97316', '#FDE047'].map(c => (
+            <div key={c} style={{ width: '12px', height: '12px', backgroundColor: c, borderRadius: '2px' }} />
+          ))}
+          <span>High</span>
+        </div>
       </div>
     </div>
   );

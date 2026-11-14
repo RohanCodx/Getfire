@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import MapComponent from './MapComponent';
 import CalendarHeatmap from './CalendarHeatmap';
 import AnomalyChart from './AnomalyChart';
@@ -10,273 +10,232 @@ import './App.css';
 const fallbackFires = [
   { id: 1, lat: 39.7392, lng: -104.9903, sensor: 'MODIS', confidence: 89, location: 'Colorado, USA', frp: 34.2, time: '18:20 UTC' },
   { id: 2, lat: -3.4653, lng: -62.2159, sensor: 'VIIRS', confidence: 92, location: 'Amazon Basin, Brazil', frp: 45.1, time: '04:48 UTC' },
-  { id: 3, lat: -33.8688, lng: 151.2093, sensor: 'Harmonized', confidence: 78, location: 'Sydney, Australia', frp: 22.5, time: '02:15 UTC' },
+  { id: 3, lat: -33.8688, lng: 151.2093, sensor: 'Both', confidence: 78, location: 'Sydney, Australia', frp: 22.5, time: '02:15 UTC' },
   { id: 4, lat: 27.8143, lng: -97.4318, sensor: 'VIIRS', confidence: 85, location: 'Texas, USA', frp: 12.8, time: '15:30 UTC' },
   { id: 5, lat: -1.2921, lng: 36.8219, sensor: 'MODIS', confidence: 95, location: 'Kenya', frp: 55.0, time: '11:00 UTC' },
 ];
 
-const fallbackStats = { total_observations: 5120, modis_observations: 2301, viirs_observations: 2819 };
-
-const getSeverity = (frp) => {
-  const power = parseFloat(frp);
-  if (power > 50) return { label: 'EXTREME', color: '#FF0000' };
-  if (power > 20) return { label: 'HIGH', color: '#FF6B35' };
-  if (power > 10) return { label: 'MODERATE', color: '#FFD700' };
-  return { label: 'LOW', color: '#00B4D8' };
-};
+const fallbackStats = { total_observations: 5120, modis_observations: 2301, viirs_observations: 2819, modis_frp_mw_total: 45210, viirs_frp_mw_total: 38012 };
 
 function App() {
   const [isAppOpen, setIsAppOpen] = useState(false);
   const [activeView, setActiveView] = useState('map');
-  const [activeSensor, setActiveSensor] = useState('Harmonized');
+  const [activeSensor, setActiveSensor] = useState('Both');
   const [selectedFire, setSelectedFire] = useState(null);
-  const [mapStyle, setMapStyle] = useState('dark'); 
-  
+  const [mapStyle, setMapStyle] = useState('dark');
   const [showLeft, setShowLeft] = useState(true);
   const [showRight, setShowRight] = useState(true);
-  
+
   const [liveFires, setLiveFires] = useState([]);
   const [stats, setStats] = useState(fallbackStats);
   const [isLive, setIsLive] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const [sortBy, setSortBy] = useState('frp');
   const [confidenceThreshold, setConfidenceThreshold] = useState(0);
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [toast, setToast] = useState('');
+
+  const showToast = useCallback((msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 2000);
+  }, []);
 
   const handleSearch = async (e) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
     setIsSearching(true);
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`);
       const data = await res.json();
       if (data && data.length > 0) {
-        const { lat, lon } = data[0];
-        setSelectedFire({ lat: parseFloat(lat), lng: parseFloat(lon), id: 'search-target', location: 'Search Result' });
+        setSelectedFire({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), id: 'search-target', location: data[0].display_name.split(',')[0] });
       } else {
-        alert("Location not found.");
+        showToast('Location not found');
       }
     } catch (error) {
       console.error(error);
+      showToast('Search failed');
     }
     setIsSearching(false);
   };
 
-  const autoGeocode = async (firesArray) => {
-    for (let i = 0; i < Math.min(5, firesArray.length); i++) {
-      const fire = firesArray[i];
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${fire.lat}&lon=${fire.lng}&format=json`);
-        const data = await res.json();
-        if (data.display_name) {
-          setLiveFires(prev => prev.map(f => f.id === fire.id ? { ...f, location: data.display_name.split(',')[0] } : f));
-        }
-      } catch (e) {
-        console.warn("Geocode error", e);
-      }
-      await new Promise(r => setTimeout(r, 1000));
-    }
-  };
-
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/v1/summary`)
-      .then(res => res.json())
-      .then(data => { 
-        if(data.total_observations > 0) { 
-          setStats(data); 
-          setIsLive(true); 
-        } 
+      .then(res => { if (!res.ok) throw new Error(res.status); return res.json(); })
+      .then(data => {
+        if (data.total_observations > 0) { setStats(data); setIsLive(true); }
       })
-      .catch(() => console.warn("Backend offline."));
+      .catch(() => console.warn('Backend offline.'));
 
-    const fetchHalf = (west, east) => 
-      fetch(`${API_BASE_URL}/api/v1/hotspots?west=${west}&south=-60&east=${east}&north=70`)
-        .then(res => res.json());
-
-    Promise.all([fetchHalf(-150, 0), fetchHalf(0, 150)])
-      .then(([westData, eastData]) => {
-        const allFeatures = [...(westData.features || []), ...(eastData.features || [])];
-        if (allFeatures.length > 0) {
-          const formattedData = allFeatures.map((f, index) => {
-            const isDummy = f.properties.confidence === 80 && f.properties.frp === 0;
-            return {
-              id: index,
-              lat: f.geometry.coordinates[1],
-              lng: f.geometry.coordinates[0],
-              sensor: f.properties.sensor || 'MODIS',
-              confidence: isDummy ? Math.floor(Math.random() * 20) + 75 : f.properties.confidence,
-              location: f.properties.location || `Lat: ${f.geometry.coordinates[1].toFixed(2)}, Lng: ${f.geometry.coordinates[0].toFixed(2)}`,
-              frp: isDummy ? (Math.random() * 40 + 1).toFixed(1) : f.properties.frp,
-              time: f.properties.time || 'Recent'
-            };
-          });
-          const mixedData = formattedData.sort(() => Math.random() - 0.5);
-          setLiveFires(mixedData);
+    fetch(`${API_BASE_URL}/api/v1/hotspots?west=-180&south=-90&east=180&north=90`)
+      .then(res => { if (!res.ok) throw new Error(res.status); return res.json(); })
+      .then(data => {
+        if (data.features && data.features.length > 0) {
+          const formatted = data.features.map((f, index) => ({
+            id: index,
+            lat: f.geometry.coordinates[1],
+            lng: f.geometry.coordinates[0],
+            sensor: f.properties.sensor || 'MODIS',
+            confidence: f.properties.confidence || 0,
+            location: f.properties.location || `Lat: ${f.geometry.coordinates[1].toFixed(2)}, Lng: ${f.geometry.coordinates[0].toFixed(2)}`,
+            frp: f.properties.frp || 0,
+            time: f.properties.time || 'Recent',
+          }));
+          setLiveFires(formatted);
           setIsLive(true);
-          autoGeocode(mixedData);
+          setLastUpdated(new Date().toLocaleTimeString('en-GB', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' }));
         }
       })
-      .catch(() => console.warn("Backend offline. Using demo fires."));
+      .catch(() => console.warn('Backend offline. Using demo fires.'))
+      .finally(() => setIsLoading(false));
   }, []);
 
   const sourceData = liveFires.length > 0 ? liveFires : fallbackFires;
   const displayStats = isLive ? stats : fallbackStats;
-  
-  let filteredFires = activeSensor === 'Harmonized' 
-    ? sourceData 
-    : sourceData.filter(fire => fire.sensor.toUpperCase() === activeSensor.toUpperCase());
 
-  filteredFires = filteredFires.filter(fire => fire.confidence >= confidenceThreshold);
+  let filteredFires = activeSensor === 'Both'
+    ? sourceData
+    : sourceData.filter(f => {
+        const s = f.sensor.toUpperCase();
+        return s === activeSensor.toUpperCase() || s === 'BOTH';
+      });
 
+  filteredFires = filteredFires.filter(f => f.confidence >= confidenceThreshold);
   filteredFires = [...filteredFires].sort((a, b) => {
     if (sortBy === 'frp') return parseFloat(b.frp) - parseFloat(a.frp);
     if (sortBy === 'confidence') return b.confidence - a.confidence;
-    if (sortBy === 'time') return a.time.localeCompare(b.time);
     return 0;
   });
 
   const downloadCSV = () => {
-    const headers = "ID,Latitude,Longitude,Sensor,Confidence,FRP,Time\n";
-    const rows = filteredFires.map(f => `${f.id},${f.lat},${f.lng},${f.sensor},${f.confidence},${f.frp},${f.time}`).join("\n");
+    const headers = 'ID,Latitude,Longitude,Sensor,Confidence,FRP,Location\n';
+    const rows = filteredFires
+      .map(f => `${f.id},${f.lat},${f.lng},${f.sensor},${f.confidence},${f.frp},"${String(f.location).replace(/"/g, '""')}"`)
+      .join('\n');
     const blob = new Blob([headers + rows], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'harmonized_hotspots.csv';
     a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   const copyCoordinates = (lat, lng) => {
-    navigator.clipboard.writeText(`${lat}, ${lng}`);
-    alert(`Copied coordinates: ${lat}, ${lng}`);
+    navigator.clipboard.writeText(`${lat}, ${lng}`)
+      .then(() => showToast(`Copied: ${lat.toFixed(4)}, ${lng.toFixed(4)}`))
+      .catch(() => showToast('Copy failed'));
   };
 
-  if (!isAppOpen) {
-    return <LandingPage onEnter={() => setIsAppOpen(true)} />;
-  }
+  if (!isAppOpen) return <LandingPage onEnter={() => setIsAppOpen(true)} />;
 
   return (
     <div className="dashboard-container">
-      <header className="top-bar hud-panel">
+      <header className="top-bar">
         <div className="logo-area">
-          <button className="hud-btn" onClick={() => setShowLeft(!showLeft)}>
-            {showLeft ? '[ < ]' : '[ > ]'}
+          <button className="icon-btn" onClick={() => setShowLeft(!showLeft)} aria-label="Toggle Filters">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
           </button>
-          <div className="logo" onClick={() => setIsAppOpen(false)} style={{ cursor: 'pointer' }}>
-            HARMONIZED HOTSPOTS
-          </div>
+          <div className="logo">Earth Observation Workspace</div>
         </div>
         <div className="nav-tabs">
           <button className={`nav-tab ${activeView === 'map' ? 'active' : ''}`} onClick={() => setActiveView('map')}>Live Map</button>
           <button className={`nav-tab ${activeView === 'analytics' ? 'active' : ''}`} onClick={() => setActiveView('analytics')}>Analytics</button>
-          <button className={`nav-tab ${activeView === 'data' ? 'active' : ''}`} onClick={() => setActiveView('data')}>Data Export</button>
+          <button className={`nav-tab ${activeView === 'data' ? 'active' : ''}`} onClick={() => setActiveView('data')}>Export Data</button>
         </div>
         <div className="status-indicator">
-          {activeView === 'map' && (
-            <button className="hud-btn" onClick={() => setShowRight(!showRight)}>
-              {showRight ? '[ > ]' : '[ < ]'}
-            </button>
-          )}
-          <span style={{ fontSize: '0.65rem', color: '#6B7280', marginLeft: '10px', fontFamily: 'JetBrains Mono' }}>
-            SYNC: {stats.latest_successful_sync_utc ? new Date(stats.latest_successful_sync_utc).toLocaleTimeString() : 'OFFLINE'}
+          <button className="icon-btn" onClick={() => setShowRight(!showRight)} aria-label="Toggle Detections">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+          </button>
+          <span style={{ fontSize: '0.8rem', color: '#A1A1AA' }}>
+            {isLive ? `Fetched ${lastUpdated} UTC` : 'Demo Data'}
           </span>
-          <span className={`status-dot ${isLive ? 'live' : 'demo'}`}></span>
-          {isLive ? 'SYSTEM ONLINE' : 'DEMO MODE'}
+          <div className={`status-dot ${isLive ? 'live' : 'demo'}`}></div>
         </div>
       </header>
 
       <div className="main-content">
-        <aside className={`sidebar hud-panel ${showLeft ? 'open' : 'closed'}`}>
-          
+        <aside className={`sidebar ${showLeft ? 'open' : 'closed'}`}>
           <div className="sidebar-section">
-            <h3>REGION SEARCH</h3>
-            <form onSubmit={handleSearch} style={{ display: 'flex', gap: '8px', minWidth: '250px' }}>
-              <input 
-                type="text" 
-                placeholder="City or Country..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="search-input"
+            <h3>Search Region</h3>
+            <form onSubmit={handleSearch} style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text" placeholder="City or Country..." value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)} className="search-input"
               />
-              <button type="submit" className="hud-btn" disabled={isSearching}>
-                {isSearching ? '...' : 'GO'}
+              <button type="submit" className="btn-secondary" disabled={isSearching}>
+                {isSearching ? '...' : 'Go'}
               </button>
             </form>
           </div>
 
           <div className="sidebar-section">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h3 style={{ margin: 0 }}>CONFIDENCE THRESHOLD</h3>
-              <span className="stat-value text-cyan" style={{ fontSize: '0.85rem' }}>{confidenceThreshold}%</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={confidenceThreshold}
-              onChange={(e) => setConfidenceThreshold(Number(e.target.value))}
-              className="confidence-slider"
-            />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: '#6B7280', marginTop: '8px', fontWeight: 'bold' }}>
-              <span>0% (ALL)</span>
-              <span>100%</span>
-            </div>
-          </div>
-
-          <div className="sidebar-section">
-            <h3>MISSION STATS</h3>
+            <h3>Observation Summary</h3>
             <div className="stat-grid">
               <div className="stat-box">
-                <span className="stat-label">TOTAL OBS</span>
+                <span className="stat-label">Total Detections</span>
                 <span className="stat-value">{displayStats.total_observations.toLocaleString()}</span>
               </div>
               <div className="stat-box">
-                <span className="stat-label">TOTAL FRP (MW)</span>
+                <span className="stat-label">Detections in View</span>
+                <span className="stat-value text-cyan">{filteredFires.length.toLocaleString()}</span>
+              </div>
+              <div className="stat-box">
+                <span className="stat-label">Total Radiative Power</span>
                 <span className="stat-value text-orange">
-                  {((displayStats.modis_frp_mw_total || 45210) + (displayStats.viirs_frp_mw_total || 38012)).toLocaleString()}
+                  {((displayStats.modis_frp_mw_total || 0) + (displayStats.viirs_frp_mw_total || 0)).toLocaleString()} MW
                 </span>
-              </div>
-              <div className="stat-box">
-                <span className="stat-label">MODIS DETECT</span>
-                <span className="stat-value text-orange">{displayStats.modis_observations.toLocaleString()}</span>
-              </div>
-              <div className="stat-box">
-                <span className="stat-label">VIIRS DETECT</span>
-                <span className="stat-value text-cyan">{displayStats.viirs_observations.toLocaleString()}</span>
               </div>
             </div>
           </div>
 
           <div className="sidebar-section">
-            <h3>SENSOR FILTER</h3>
+            <h3>Min. Detection Confidence</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input type="range" min="0" max="100" value={confidenceThreshold} onChange={(e) => setConfidenceThreshold(Number(e.target.value))} className="confidence-slider" />
+              <span className="stat-value text-cyan" style={{ fontSize: '0.9rem' }}>{confidenceThreshold}%</span>
+            </div>
+          </div>
+
+          <div className="sidebar-section">
+            <h3>Sensor Selection</h3>
             <div className="sensor-toggles">
-              {['MODIS', 'VIIRS', 'Harmonized'].map((sensor) => (
-                <button key={sensor} className={`sensor-btn ${activeSensor === sensor ? 'active' : ''} ${sensor.toLowerCase()}`} onClick={() => setActiveSensor(sensor)}>
-                  {sensor}
+              {['MODIS', 'VIIRS', 'Both'].map((sensor) => (
+                <button key={sensor} className={`sensor-btn ${activeSensor === sensor ? 'active' : ''}`} onClick={() => setActiveSensor(sensor)}>
+                  {sensor === 'Both' ? 'Both Sensors' : sensor}
                 </button>
               ))}
             </div>
           </div>
 
           <div className="sidebar-section">
-            <h3>MAP CONTROLS</h3>
-            <button className="map-toggle-btn" onClick={() => setMapStyle(mapStyle === 'dark' ? 'satellite' : 'dark')}>
-              {mapStyle === 'dark' ? 'SWITCH TO SATELLITE' : 'SWITCH TO DARK'}
+            <h3>Map Base Layer</h3>
+            <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setMapStyle(mapStyle === 'dark' ? 'satellite' : 'dark')}>
+              {mapStyle === 'dark' ? 'Switch to Satellite' : 'Switch to Dark Map'}
             </button>
+          </div>
+
+          <div className="sidebar-section credits">
+            Data: NASA FIRMS (MODIS / VIIRS). Basemaps: © OpenStreetMap contributors, Esri.
           </div>
         </aside>
 
         <main className="map-area-container">
           {activeView === 'map' && (
-            <div className={`map-area ${mapStyle}`}>
-              <MapComponent fires={filteredFires} selectedFire={selectedFire} mapStyle={mapStyle} />
-              <div className="legend hud-panel">
-                <div className="legend-title">SENSOR ORIGIN</div>
-                <div className="legend-item"><span className="dot modis"></span> MODIS</div>
-                <div className="legend-item"><span className="dot viirs"></span> VIIRS</div>
-                <div className="legend-item"><span className="dot harmonized"></span> HARMONIZED</div>
+            <div className={`map-area map-${mapStyle}`}>
+              <MapComponent fires={filteredFires} selectedFire={selectedFire} mapStyle={mapStyle} onToast={showToast} />
+              {isLoading && <div className="map-banner">Loading hotspots…</div>}
+              {!isLoading && !isLive && <div className="map-banner warn">Backend offline – showing demo data</div>}
+              <div className="legend">
+                <div className="legend-title">Sensor Type</div>
+                <div className="legend-item"><div className="dot modis"></div> MODIS</div>
+                <div className="legend-item"><div className="dot viirs"></div> VIIRS</div>
+                <div className="legend-item"><div className="dot harmonized"></div> BOTH</div>
+                <div className="legend-note">Bigger circle = higher FRP</div>
               </div>
             </div>
           )}
@@ -284,18 +243,17 @@ function App() {
           {activeView === 'analytics' && (
             <div className="analytics-view">
               <div className="view-header">
-                <h2>HISTORICAL FIRE ACTIVITY</h2>
-                <p>Visualizing hotspot patterns and anomalies across the dataset.</p>
+                <h2>Historical Activity</h2>
+                <p>Visualizing hotspot patterns across the dataset.</p>
               </div>
               <div className="analytics-grid">
-                <div className="analytics-card hud-panel">
-                  <h3>BURNING CALENDAR (MULTI-YEAR)</h3>
+                <div className="analytics-card">
+                  <h3>Activity Calendar (Last 365 Days)</h3>
                   <CalendarHeatmap />
                 </div>
-                <div className="analytics-card hud-panel">
-                  <h3>ANOMALY DETECTION</h3>
-                  <p className="card-desc">Current season vs. 10-year historical average.</p>
-                  <AnomalyChart />
+                <div className="analytics-card">
+                  <h3>Observed Activity vs. Historical Baseline</h3>
+                  <AnomalyChart current={displayStats.total_observations} />
                 </div>
               </div>
             </div>
@@ -305,24 +263,23 @@ function App() {
             <div className="data-view">
               <div className="view-header flex-between">
                 <div>
-                  <h2>RAW DATA EXPORT</h2>
-                  <p>Download the harmonized dataset for your selected region.</p>
+                  <h2>Data Export</h2>
+                  <p>Download the filtered dataset.</p>
                 </div>
-                <button onClick={downloadCSV} className="hud-btn-primary">DOWNLOAD CSV</button>
+                <button onClick={downloadCSV} className="btn-primary">Download CSV</button>
               </div>
-              <div className="table-container hud-panel">
-                <table className="cyber-table">
+              <div className="table-container">
+                <table className="data-table">
                   <thead>
-                    <tr><th>ID</th><th>SENSOR</th><th>CONFIDENCE</th><th>FRP (MW)</th><th>TIME</th></tr>
+                    <tr><th>Sensor</th><th>Confidence</th><th>Radiative Power</th><th>Location</th></tr>
                   </thead>
                   <tbody>
                     {filteredFires.slice(0, 100).map(f => (
                       <tr key={f.id}>
-                        <td className="mono">#{f.id}</td>
                         <td><span className={`sensor-tag ${f.sensor.toLowerCase()}`}>{f.sensor}</span></td>
-                        <td className="mono">{f.confidence}%</td>
-                        <td className="mono">{f.frp}</td>
-                        <td className="mono text-gray">{f.time}</td>
+                        <td>{f.confidence}%</td>
+                        <td>{f.frp} MW</td>
+                        <td>{f.location}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -333,61 +290,41 @@ function App() {
         </main>
 
         {activeView === 'map' && (
-          <aside className={`right-panel hud-panel ${showRight ? 'open' : 'closed'}`}>
+          <aside className={`right-panel ${showRight ? 'open' : 'closed'}`}>
             <div className="panel-header">
-              <h3>DETECTED HOTSPOTS</h3>
+              <h3>Detections</h3>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <select 
-                  className="sort-select" 
-                  value={sortBy} 
-                  onChange={(e) => setSortBy(e.target.value)}
-                >
+                <select className="sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
                   <option value="frp">Highest FRP</option>
                   <option value="confidence">Highest Confidence</option>
-                  <option value="time">Most Recent</option>
                 </select>
                 <span className="count-badge">{filteredFires.length}</span>
               </div>
             </div>
-            
+
             <div className="fire-list">
               {filteredFires.length === 0 ? (
-                <div className="empty-state">
-                  <div style={{ fontSize: '1.5rem', marginBottom: '10px' }}>!</div>
-                  <div>No hotspots detected for this filter.</div>
-                </div>
+                <div className="empty-state">No hotspots match this filter.</div>
               ) : (
                 filteredFires.slice(0, 100).map((fire) => (
-                  <div className={`fire-card ${selectedFire?.id === fire.id ? 'selected' : ''}`} key={fire.id} onClick={() => setSelectedFire(fire)}>
+                  <div
+                    role="button" tabIndex={0}
+                    className={`fire-card ${selectedFire?.id === fire.id ? 'selected' : ''}`}
+                    key={fire.id}
+                    onClick={() => setSelectedFire(fire)}
+                    onKeyDown={(e) => e.key === 'Enter' && setSelectedFire(fire)}
+                  >
                     <div className="card-top">
                       <h4>{fire.location}</h4>
                       <span className={`sensor-tag ${fire.sensor.toLowerCase()}`}>{fire.sensor}</span>
                     </div>
-                    
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '6px 0' }}>
-                      <span className="mono text-gray" style={{ fontSize: '0.7rem' }}>
-                        {fire.lat.toFixed(4)}, {fire.lng.toFixed(4)}
-                      </span>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); copyCoordinates(fire.lat, fire.lng); }}
-                        style={{ background: 'transparent', border: 'none', color: '#3B82F6', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 'bold' }}
-                      >
-                        COPY
-                      </button>
+                    <div className="card-mid" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span className="mono text-gray" style={{ fontSize: '0.75rem' }}>{fire.lat.toFixed(4)}, {fire.lng.toFixed(4)}</span>
+                      <button className="btn-text" onClick={(e) => { e.stopPropagation(); copyCoordinates(fire.lat, fire.lng); }}>Copy</button>
                     </div>
-                    <div style={{ fontSize: '0.65rem', fontWeight: 'bold', color: getSeverity(fire.frp).color, marginBottom: '4px' }}>
-                      SEVERITY: {getSeverity(fire.frp).label}
-                    </div>
-
-                    <div className="card-bottom" style={{ paddingTop: '6px' }}>
-                      <div className="telemetry-data" title="Detection Confidence (%)">
-                        <span className="data-label">CONF</span>
-                        <span className="data-value">{fire.confidence}%</span>
-                      </div>
-                      <div className="telemetry-data" title="Fire Radiative Power (MW)">
-                        <span className="data-label">FRP</span>
-                        <span className="data-value">{fire.frp} MW</span>
-                      </div>
+                    <div className="card-bottom">
+                      <div className="telemetry-data"><span className="data-label">Confidence</span><span className="data-value">{fire.confidence}%</span></div>
+                      <div className="telemetry-data"><span className="data-label">Radiative Power</span><span className="data-value">{fire.frp} MW</span></div>
                     </div>
                   </div>
                 ))
@@ -396,8 +333,9 @@ function App() {
           </aside>
         )}
       </div>
-      
-      <AIAssistant selectedFire={selectedFire} />
+
+      {toast && <div className="toast">{toast}</div>}
+      <AIAssistant selectedFire={selectedFire} fires={filteredFires} />
     </div>
   );
 }
