@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { MapContainer, TileLayer, Circle, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 const MapController = ({ selectedFire }) => {
@@ -22,6 +23,36 @@ const MapResizer = () => {
   return null;
 };
 
+const LocateControl = () => {
+  const map = useMap();
+  
+  const handleLocate = () => {
+    map.locate({ setView: true, maxZoom: 8 });
+    map.on('locationfound', (e) => {
+      L.circleMarker(e.latlng, {
+        radius: 8,
+        color: '#3B82F6',
+        fillColor: '#3B82F6',
+        fillOpacity: 0.8,
+        weight: 3
+      }).addTo(map).bindPopup("You are here").openPopup();
+    });
+    map.on('locationerror', () => {
+      alert("Could not access your location.");
+    });
+  };
+
+  return (
+    <div 
+      className="leaflet-control leaflet-bar locate-btn" 
+      onClick={handleLocate}
+      title="Find my location"
+    >
+      <span style={{ fontSize: '1.2rem' }}>🎯</span>
+    </div>
+  );
+};
+
 const MapComponent = ({ fires, selectedFire, mapStyle }) => {
   const getColor = (sensor) => {
     if (sensor === 'MODIS') return '#FF4B4B';   
@@ -42,6 +73,7 @@ const MapComponent = ({ fires, selectedFire, mapStyle }) => {
       )}
       
       <MapController selectedFire={selectedFire} />
+      <LocateControl />
       <MapResizer />
       
       {fires.map((fire) => (

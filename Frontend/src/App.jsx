@@ -18,19 +18,46 @@ const fallbackFires = [
 const fallbackStats = { total_observations: 5120, modis_observations: 2301, viirs_observations: 2819 };
 
 function App() {
+  // State
   const [isAppOpen, setIsAppOpen] = useState(false);
   const [activeView, setActiveView] = useState('map');
   const [activeSensor, setActiveSensor] = useState('Harmonized');
   const [selectedFire, setSelectedFire] = useState(null);
   const [mapStyle, setMapStyle] = useState('dark'); 
-  
   const [showLeft, setShowLeft] = useState(true);
   const [showRight, setShowRight] = useState(true);
-
+  
   const [liveFires, setLiveFires] = useState([]);
   const [stats, setStats] = useState(fallbackStats);
   const [isLive, setIsLive] = useState(false);
 
+  const [sortBy, setSortBy] = useState('frp');
+  const [confidenceThreshold, setConfidenceThreshold] = useState(0);
+  
+  // Search State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    setIsSearching(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}`);
+      const data = await res.json();
+      if (data && data.length > 0) {
+        const { lat, lon } = data[0];
+        setSelectedFire({ lat: parseFloat(lat), lng: parseFloat(lon), id: 'search-target', location: 'Search Result' });
+      } else {
+        alert("Location not found.");
+      }
+    } catch (error) {
+      console.error(error);
+    }
+    setIsSearching(false);
+  };
+
+  // Auto-geocode missing location names
   const autoGeocode = async (firesArray) => {
     for (let i = 0; i < Math.min(5, firesArray.length); i++) {
       const fire = firesArray[i];
@@ -47,6 +74,7 @@ function App() {
     }
   };
 
+  // Fetch data
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/v1/summary`)
       .then(res => res.json())
@@ -88,12 +116,22 @@ function App() {
       .catch(() => console.warn("Backend offline. Using demo fires."));
   }, []);
 
+  // Filter and sort
   const sourceData = liveFires.length > 0 ? liveFires : fallbackFires;
   const displayStats = isLive ? stats : fallbackStats;
   
-  const filteredFires = activeSensor === 'Harmonized' 
+  let filteredFires = activeSensor === 'Harmonized' 
     ? sourceData 
     : sourceData.filter(fire => fire.sensor.toUpperCase() === activeSensor.toUpperCase());
+
+  filteredFires = filteredFires.filter(fire => fire.confidence >= confidenceThreshold);
+
+  filteredFires = [...filteredFires].sort((a, b) => {
+    if (sortBy === 'frp') return parseFloat(b.frp) - parseFloat(a.frp);
+    if (sortBy === 'confidence') return b.confidence - a.confidence;
+    if (sortBy === 'time') return a.time.localeCompare(b.time);
+    return 0;
+  });
 
   const downloadCSV = () => {
     const headers = "ID,Latitude,Longitude,Sensor,Confidence,FRP,Time\n";
@@ -104,6 +142,11 @@ function App() {
     a.href = url;
     a.download = 'harmonized_hotspots.csv';
     a.click();
+  };
+
+  const copyCoordinates = (lat, lng) => {
+    navigator.clipboard.writeText(`${lat}, ${lng}`);
+    alert(`Copied coordinates: ${lat}, ${lng}`);
   };
 
   if (!isAppOpen) {
@@ -118,7 +161,7 @@ function App() {
             {showLeft ? '[ < ]' : '[ > ]'}
           </button>
           <div className="logo" onClick={() => setIsAppOpen(false)} style={{ cursor: 'pointer' }}>
-            HARMONIZED HOTSPS
+            HARMONIZED HOTSPOTS
           </div>
         </div>
         <div className="nav-tabs">
@@ -139,6 +182,45 @@ function App() {
 
       <div className="main-content">
         <aside className={`sidebar hud-panel ${showLeft ? 'open' : 'closed'}`}>
+          
+          {/* Search Section */}
+          <div className="sidebar-section">
+            <h3>REGION SEARCH</h3>
+            <form onSubmit={handleSearch} style={{ display: 'flex', gap: '8px', minWidth: '250px' }}>
+              <input 
+                type="text" 
+                placeholder="City or Country..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="search-input"
+              />
+              <button type="submit" className="hud-btn" disabled={isSearching}>
+                {isSearching ? '...' : 'GO'}
+              </button>
+            </form>
+          </div>
+
+          {/* Confidence Slider */}
+          <div className="sidebar-section">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0 }}>CONFIDENCE THRESHOLD</h3>
+              <span className="stat-value text-cyan" style={{ fontSize: '0.85rem' }}>{confidenceThreshold}%</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={confidenceThreshold}
+              onChange={(e) => setConfidenceThreshold(Number(e.target.value))}
+              className="confidence-slider"
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: '#6B7280', marginTop: '8px', fontWeight: 'bold' }}>
+              <span>0% (ALL)</span>
+              <span>100%</span>
+            </div>
+          </div>
+
+          {/* Mission Stats */}
           <div className="sidebar-section">
             <h3>MISSION STATS</h3>
             <div className="stat-grid">
@@ -157,6 +239,7 @@ function App() {
             </div>
           </div>
 
+          {/* Sensor Filter */}
           <div className="sidebar-section">
             <h3>SENSOR FILTER</h3>
             <div className="sensor-toggles">
@@ -168,6 +251,7 @@ function App() {
             </div>
           </div>
 
+          {/* Map Controls */}
           <div className="sidebar-section">
             <h3>MAP CONTROLS</h3>
             <button className="map-toggle-btn" onClick={() => setMapStyle(mapStyle === 'dark' ? 'satellite' : 'dark')}>
@@ -244,21 +328,59 @@ function App() {
           <aside className={`right-panel hud-panel ${showRight ? 'open' : 'closed'}`}>
             <div className="panel-header">
               <h3>DETECTED HOTSPOTS</h3>
-              <span className="count-badge">{filteredFires.length}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <select 
+                  className="sort-select" 
+                  value={sortBy} 
+                  onChange={(e) => setSortBy(e.target.value)}
+                >
+                  <option value="frp">Highest FRP</option>
+                  <option value="confidence">Highest Confidence</option>
+                  <option value="time">Most Recent</option>
+                </select>
+                <span className="count-badge">{filteredFires.length}</span>
+              </div>
             </div>
+            
             <div className="fire-list">
-              {filteredFires.slice(0, 100).map((fire) => (
-                <div className={`fire-card ${selectedFire?.id === fire.id ? 'selected' : ''}`} key={fire.id} onClick={() => setSelectedFire(fire)}>
-                  <div className="card-top">
-                    <h4>{fire.location}</h4>
-                    <span className={`sensor-tag ${fire.sensor.toLowerCase()}`}>{fire.sensor}</span>
-                  </div>
-                  <div className="card-bottom">
-                    <div className="telemetry-data"><span className="data-label">CONF</span><span className="data-value">{fire.confidence}%</span></div>
-                    <div className="telemetry-data"><span className="data-label">FRP</span><span className="data-value">{fire.frp} MW</span></div>
-                  </div>
+              {filteredFires.length === 0 ? (
+                <div className="empty-state">
+                  <div style={{ fontSize: '1.5rem', marginBottom: '10px' }}>📡</div>
+                  <div>No hotspots detected for this filter.</div>
                 </div>
-              ))}
+              ) : (
+                filteredFires.slice(0, 100).map((fire) => (
+                  <div className={`fire-card ${selectedFire?.id === fire.id ? 'selected' : ''}`} key={fire.id} onClick={() => setSelectedFire(fire)}>
+                    <div className="card-top">
+                      <h4>{fire.location}</h4>
+                      <span className={`sensor-tag ${fire.sensor.toLowerCase()}`}>{fire.sensor}</span>
+                    </div>
+                    
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '6px 0' }}>
+                      <span className="mono text-gray" style={{ fontSize: '0.7rem' }}>
+                        {fire.lat.toFixed(4)}, {fire.lng.toFixed(4)}
+                      </span>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); copyCoordinates(fire.lat, fire.lng); }}
+                        style={{ background: 'transparent', border: 'none', color: '#3B82F6', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 'bold' }}
+                      >
+                        COPY
+                      </button>
+                    </div>
+
+                    <div className="card-bottom" style={{ paddingTop: '6px' }}>
+                      <div className="telemetry-data" title="Detection Confidence (%)">
+                        <span className="data-label">CONF</span>
+                        <span className="data-value">{fire.confidence}%</span>
+                      </div>
+                      <div className="telemetry-data" title="Fire Radiative Power (MW)">
+                        <span className="data-label">FRP</span>
+                        <span className="data-value">{fire.frp} MW</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </aside>
         )}
