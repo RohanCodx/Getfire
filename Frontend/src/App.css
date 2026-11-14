@@ -1,0 +1,71 @@
+.dashboard-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* Fills exactly the screen height */
+  width: 100vw;  /* Fills exactly the screen width */
+  overflow: hidden;
+  background-color: #0B0F19;
+  color: #E5E7EB;
+}
+
+/* Top Bar */
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  background-color: #111827;
+  border-bottom: 1px solid #1F2937;
+  height: 70px;
+}
+.logo { font-weight: 700; font-size: 1.25rem; color: #FFF; letter-spacing: 0.5px; }
+.toggles { display: flex; gap: 0.5rem; background: #1F2937; padding: 4px; border-radius: 8px; }
+.toggle-btn {
+  background: transparent; color: #9CA3AF; border: none; padding: 0.5rem 1rem;
+  border-radius: 6px; cursor: pointer; font-weight: 500; transition: 0.2s;
+}
+.toggle-btn.active { background: #374151; color: #FFF; }
+.date { font-family: monospace; color: #9CA3AF; }
+
+/* Main Layout */
+.main-content { display: flex; flex: 1; height: calc(100vh - 70px); }
+
+/* Sidebars */
+.sidebar { width: 260px; background-color: #111827; padding: 1.5rem; border-right: 1px solid #1F2937; }
+.right-panel { width: 340px; background-color: #111827; padding: 1.5rem; border-left: 1px solid #1F2937; overflow-y: auto; }
+.sidebar h3, .right-panel h3 { font-size: 1.1rem; margin-bottom: 1.5rem; color: #FFF; }
+.filter-group { margin-top: 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.filter-group label { font-size: 0.85rem; color: #9CA3AF; font-weight: 500; }
+select, input[type="range"] { width: 100%; background: #1F2937; border: 1px solid #374151; color: white; padding: 8px; border-radius: 6px; outline: none; }
+
+/* Map Area */
+.map-area { flex: 1; position: relative; display: flex; background: #0B0F19; }
+.leaflet-container { height: 100%; width: 100%; background: #0B0F19 !important; }
+
+/* THE MAGIC DARK MAP FILTER */
+.leaflet-tile-pane {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%) saturate(200%);
+}
+
+/* Legend */
+.legend {
+  position: absolute; bottom: 30px; left: 30px; background: rgba(17, 24, 39, 0.9);
+  padding: 1rem; border-radius: 8px; border: 1px solid #374151; z-index: 1000;
+  backdrop-filter: blur(10px);
+}
+.legend-item { display: flex; align-items: center; gap: 10px; font-size: 0.85rem; margin-bottom: 8px; font-weight: 500; }
+.dot { width: 12px; height: 12px; border-radius: 50%; }
+.dot.modis { background-color: #FF6B35; box-shadow: 0 0 10px #FF6B35; }
+.dot.viirs { background-color: #00B4D8; box-shadow: 0 0 10px #00B4D8; }
+.dot.harmonized { background-color: #9D4EDD; box-shadow: 0 0 10px #9D4EDD; }
+
+/* Fire Cards */
+.fire-list { display: flex; flex-direction: column; gap: 12px; }
+.fire-card { background: #1F2937; padding: 1rem; border-radius: 8px; border: 1px solid #374151; transition: 0.2s; }
+.fire-card:hover { border-color: #4B5563; transform: translateY(-2px); }
+.fire-card h4 { margin-bottom: 6px; font-size: 1rem; color: #FFF; }
+.fire-card p { font-family: monospace; font-size: 0.8rem; color: #9CA3AF; margin-bottom: 12px; }
+.badges { display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; }
+.badge { padding: 4px 8px; border-radius: 4px; font-weight: 700; color: #fff; }
+.badge.modis { background-color: #FF6B35; }
+.badge.harmonized { background-color: #9D4EDD; }
