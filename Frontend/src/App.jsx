@@ -3,6 +3,7 @@ import MapComponent from './MapComponent';
 import CalendarHeatmap from './CalendarHeatmap';
 import AnomalyChart from './AnomalyChart';
 import LandingPage from './LandingPage';
+import AIAssistant from './AIAssistant';
 import { API_BASE_URL } from './config';
 import './App.css';
 
@@ -111,9 +112,9 @@ function App() {
 
   return (
     <div className="dashboard-container">
-      <header className="top-bar">
+      <header className="top-bar hud-panel">
         <div className="logo-area">
-          <button className="toggle-btn" onClick={() => setShowLeft(!showLeft)}>
+          <button className="hud-btn" onClick={() => setShowLeft(!showLeft)}>
             {showLeft ? '[ < ]' : '[ > ]'}
           </button>
           <div className="logo" onClick={() => setIsAppOpen(false)} style={{ cursor: 'pointer' }}>
@@ -127,7 +128,7 @@ function App() {
         </div>
         <div className="status-indicator">
           {activeView === 'map' && (
-            <button className="toggle-btn" onClick={() => setShowRight(!showRight)}>
+            <button className="hud-btn" onClick={() => setShowRight(!showRight)}>
               {showRight ? '[ > ]' : '[ < ]'}
             </button>
           )}
@@ -137,7 +138,7 @@ function App() {
       </header>
 
       <div className="main-content">
-        <aside className={`sidebar ${showLeft ? 'open' : 'closed'}`}>
+        <aside className={`sidebar hud-panel ${showLeft ? 'open' : 'closed'}`}>
           <div className="sidebar-section">
             <h3>MISSION STATS</h3>
             <div className="stat-grid">
@@ -179,7 +180,7 @@ function App() {
           {activeView === 'map' && (
             <div className={`map-area ${mapStyle}`}>
               <MapComponent fires={filteredFires} selectedFire={selectedFire} mapStyle={mapStyle} />
-              <div className="legend">
+              <div className="legend hud-panel">
                 <div className="legend-title">SENSOR ORIGIN</div>
                 <div className="legend-item"><span className="dot modis"></span> MODIS</div>
                 <div className="legend-item"><span className="dot viirs"></span> VIIRS</div>
@@ -195,11 +196,11 @@ function App() {
                 <p>Visualizing hotspot patterns and anomalies across the dataset.</p>
               </div>
               <div className="analytics-grid">
-                <div className="analytics-card">
+                <div className="analytics-card hud-panel">
                   <h3>BURNING CALENDAR (MULTI-YEAR)</h3>
                   <CalendarHeatmap />
                 </div>
-                <div className="analytics-card">
+                <div className="analytics-card hud-panel">
                   <h3>ANOMALY DETECTION</h3>
                   <p className="card-desc">Current season vs. 10-year historical average.</p>
                   <AnomalyChart />
@@ -215,9 +216,9 @@ function App() {
                   <h2>RAW DATA EXPORT</h2>
                   <p>Download the harmonized dataset for your selected region.</p>
                 </div>
-                <button onClick={downloadCSV} className="cyber-btn primary">DOWNLOAD CSV</button>
+                <button onClick={downloadCSV} className="hud-btn-primary">DOWNLOAD CSV</button>
               </div>
-              <div className="table-container">
+              <div className="table-container hud-panel">
                 <table className="cyber-table">
                   <thead>
                     <tr><th>ID</th><th>SENSOR</th><th>CONFIDENCE</th><th>FRP (MW)</th><th>TIME</th></tr>
@@ -240,7 +241,7 @@ function App() {
         </main>
 
         {activeView === 'map' && (
-          <aside className={`right-panel ${showRight ? 'open' : 'closed'}`}>
+          <aside className={`right-panel hud-panel ${showRight ? 'open' : 'closed'}`}>
             <div className="panel-header">
               <h3>DETECTED HOTSPOTS</h3>
               <span className="count-badge">{filteredFires.length}</span>
@@ -262,6 +263,8 @@ function App() {
           </aside>
         )}
       </div>
+      
+      <AIAssistant selectedFire={selectedFire} />
     </div>
   );
 }
