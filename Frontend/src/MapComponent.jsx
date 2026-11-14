@@ -1,48 +1,51 @@
-import React from 'react';
-import { MapContainer, TileLayer, CircleMarker, Tooltip } from 'react-leaflet';
+import React, { useEffect } from 'react';
+import { MapContainer, TileLayer, Circle, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
-const MapComponent = () => {
-  // fake data
-  const fires = [
-    { id: 1, lat: -3.4653, lng: -62.2159, color: '#FF6B35', sensor: 'MODIS' }, // Amazon
-    { id: 2, lat: 39.7392, lng: -104.9903, color: '#00B4D8', sensor: 'VIIRS' }, // Colorado
-    { id: 3, lat: -33.8688, lng: 151.2093, color: '#9D4EDD', sensor: 'Harmonized' }, // Sydney
-    { id: 4, lat: 35.6895, lng: 139.6917, color: '#FF6B35', sensor: 'MODIS' }, // Tokyo
-    { id: 5, lat: -1.2921, lng: 36.8219, color: '#00B4D8', sensor: 'VIIRS' }, // Kenya
-    { id: 6, lat: 55.7558, lng: 37.6173, color: '#9D4EDD', sensor: 'Harmonized' }, // Moscow
-    { id: 7, lat: 28.6139, lng: 77.2090, color: '#FF6B35', sensor: 'MODIS' }, // Delhi
-    { id: 8, lat: -22.9068, lng: -43.1729, color: '#00B4D8', sensor: 'VIIRS' }, // Rio
-    { id: 9, lat: 51.5074, lng: -0.1278, color: '#9D4EDD', sensor: 'Harmonized' }, // London
-  ];
+// A helper component to handle the map flying
+const MapController = ({ selectedFire }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (selectedFire) {
+      map.flyTo([selectedFire.lat, selectedFire.lng], 6, { duration: 1.5 });
+    }
+  }, [selectedFire, map]);
+  return null;
+};
+
+const MapComponent = ({ fires, selectedFire }) => {
+  const getColor = (sensor) => {
+    if (sensor === 'MODIS') return '#FF6B35';
+    if (sensor === 'VIIRS') return '#00B4D8';
+    return '#9D4EDD';
+  };
 
   return (
-    <MapContainer
-      center={[20, 0]} 
-      zoom={2} 
-      minZoom={2}
-      style={{ height: '100%', width: '100%', background: '#0B0F19' }}
-      zoomControl={false}
-    >
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-      />
+    <MapContainer center={[20, 0]} zoom={3} minZoom={2} style={{ height: '100%', width: '100%' }} zoomControl={false}>
+      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       
+      <MapController selectedFire={selectedFire} />
+
       {fires.map((fire) => (
-        <CircleMarker
+        <Circle
           key={fire.id}
           center={[fire.lat, fire.lng]}
+          radius={250000}
           pathOptions={{ 
-            color: fire.color, 
-            fillColor: fire.color, 
-            fillOpacity: 0.9,
-            weight: 2 
+            color: getColor(fire.sensor), 
+            fillColor: getColor(fire.sensor), 
+            fillOpacity: 0.15, 
+            weight: 3 
           }}
-          radius={7} // Size of the dot
         >
-          <Tooltip>{fire.sensor} Fire</Tooltip>
-        </CircleMarker>
+          <Popup>
+            <div style={{ fontFamily: 'Inter, sans-serif', minWidth: '150px' }}>
+              <strong style={{ color: getColor(fire.sensor), fontSize: '14px' }}>{fire.sensor} Hotspot</strong><br/>
+              <span style={{color: '#666', fontSize: '12px'}}>{fire.location}</span><br/><hr style={{margin: '5px 0'}}/>
+              Confidence: <b>{fire.confidence}%</b>
+            </div>
+          </Popup>
+        </Circle>
       ))}
     </MapContainer>
   );
