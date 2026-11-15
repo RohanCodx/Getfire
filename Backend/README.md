@@ -3,7 +3,7 @@
 A complete Node.js/Express conversion of the GetFire Python/FastAPI backend.
 
 ## Stack
-- **Runtime**: Node.js (v18+)
+- **Runtime**: Node.js (v22+)
 - **Framework**: Express.js
 - **Database**: SQLite via `better-sqlite3`
 - **Geospatial**: H3 hexagonal indexing via `h3-js`
