@@ -54,7 +54,20 @@ const getColor = (sensor) => {
   return '#C084FC';
 };
 
-const MapComponent = ({ fires, selectedFire, mapStyle, onToast }) => {
+const BoundsTracker = ({ onBoundsChange }) => {
+  const map = useMap();
+  useEffect(() => {
+    const handleMove = () => {
+      if (onBoundsChange) onBoundsChange(map.getBounds());
+    };
+    map.on('moveend', handleMove);
+    handleMove(); // Initial call
+    return () => map.off('moveend', handleMove);
+  }, [map, onBoundsChange]);
+  return null;
+};
+
+const MapComponent = ({ fires, selectedFire, mapStyle, onToast , onBoundsChange }) => {
   return (
     <MapContainer
       center={[20, 0]}
@@ -67,6 +80,7 @@ const MapComponent = ({ fires, selectedFire, mapStyle, onToast }) => {
     >
       {mapStyle === 'dark' && (
         <TileLayer
+          key="dark"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution="&copy; OpenStreetMap contributors"
         />
@@ -74,6 +88,7 @@ const MapComponent = ({ fires, selectedFire, mapStyle, onToast }) => {
       {mapStyle === 'satellite' && (
         <>
           <TileLayer
+            key="sat"
             url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
             attribution="Tiles &copy; Esri"
           />
@@ -81,6 +96,7 @@ const MapComponent = ({ fires, selectedFire, mapStyle, onToast }) => {
         </>
       )}
       <MapController selectedFire={selectedFire} />
+      <BoundsTracker onBoundsChange={onBoundsChange}/>
       <LocateControl onToast={onToast} />
       <MapResizer />
       {fires.map((fire) => {

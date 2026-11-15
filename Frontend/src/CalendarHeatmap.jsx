@@ -19,7 +19,7 @@ const CalendarHeatmap = () => {
   }, []);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/v1/calendar?west=-180&south=-90&east=180&north=90&start_date=${fmt(dates[0])}&end_date=${fmt(dates[DAYS - 1])}`)
+    fetch(`${API_BASE_URL}/api/v1/calendar?west=-179&south=-89&east=179&north=89&start_date=${fmt(dates[0])}&end_date=${fmt(dates[DAYS - 1])}`)
       .then(res => { if (!res.ok) throw new Error(res.status); return res.json(); })
       .then(data => {
         const arr = data.days || data;
@@ -42,12 +42,12 @@ const CalendarHeatmap = () => {
 
   const getColor = (count) => {
     const p = (count / max) * 100;
-    if (count === 0) return '#18181B';
-    if (p > 80) return '#FDE047';
-    if (p > 60) return '#F97316';
-    if (p > 40) return '#C026D3';
-    if (p > 20) return '#581C87';
-    return '#27272A';
+    if (count === 0) return '#1F1F1F';
+    if (p > 80) return '#E07A5F';
+    if (p > 60) return '#D68C45';
+    if (p > 40) return '#81B29A';
+    if (p > 20) return '#52796F';
+    return '#2F3E46';
   };
 
   const monthLabels = [];
@@ -85,7 +85,7 @@ const CalendarHeatmap = () => {
         <span>{hasData ? '' : 'No data – backend offline'}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span>Low</span>
-          {['#18181B', '#581C87', '#C026D3', '#F97316', '#FDE047'].map(c => (
+          {['#1F1F1F', '#2F3E46', '#52796F', '#81B29A', '#E07A5F'].map(c => (
             <div key={c} style={{ width: '12px', height: '12px', backgroundColor: c, borderRadius: '2px' }} />
           ))}
           <span>High</span>

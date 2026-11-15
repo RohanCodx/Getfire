@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import MapComponent from './MapComponent';
+import AnalyticsView from './AnalyticsView';
 import CalendarHeatmap from './CalendarHeatmap';
 import AnomalyChart from './AnomalyChart';
 import LandingPage from './LandingPage';
@@ -23,9 +24,9 @@ function App() {
   const [activeSensor, setActiveSensor] = useState('Both');
   const [selectedFire, setSelectedFire] = useState(null);
   const [mapStyle, setMapStyle] = useState('dark');
+  const [mapBounds, setMapBounds] = useState(null);
   const [showLeft, setShowLeft] = useState(true);
   const [showRight, setShowRight] = useState(true);
-
   const [liveFires, setLiveFires] = useState([]);
   const [stats, setStats] = useState(fallbackStats);
   const [isLive, setIsLive] = useState(false);
@@ -64,7 +65,7 @@ function App() {
   };
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/v1/summary`)
+    fetch(`${API_BASE_URL}/api/v1/hotspots?west=-179&south=-89&east=179&north=89`)
       .then(res => { if (!res.ok) throw new Error(res.status); return res.json(); })
       .then(data => {
         if (data.total_observations > 0) { setStats(data); setIsLive(true); }
@@ -80,9 +81,9 @@ function App() {
             lat: f.geometry.coordinates[1],
             lng: f.geometry.coordinates[0],
             sensor: f.properties.sensor || 'MODIS',
-            confidence: f.properties.confidence || 0,
+            confidence: f.properties.confidence_raw || 0,
             location: f.properties.location || `Lat: ${f.geometry.coordinates[1].toFixed(2)}, Lng: ${f.geometry.coordinates[0].toFixed(2)}`,
-            frp: f.properties.frp || 0,
+            frp: f.properties.frp_mw || 0,
             time: f.properties.time || 'Recent',
           }));
           setLiveFires(formatted);
@@ -227,7 +228,7 @@ function App() {
         <main className="map-area-container">
           {activeView === 'map' && (
             <div className={`map-area map-${mapStyle}`}>
-              <MapComponent fires={filteredFires} selectedFire={selectedFire} mapStyle={mapStyle} onToast={showToast} />
+              <MapComponent fires={filteredFires} selectedFire={selectedFire} mapStyle={mapStyle} onToast={showToast} onBoundsChange={setMapBounds}/>
               {isLoading && <div className="map-banner">Loading hotspots…</div>}
               {!isLoading && !isLive && <div className="map-banner warn">Backend offline – showing demo data</div>}
               <div className="legend">
@@ -241,22 +242,7 @@ function App() {
           )}
 
           {activeView === 'analytics' && (
-            <div className="analytics-view">
-              <div className="view-header">
-                <h2>Historical Activity</h2>
-                <p>Visualizing hotspot patterns across the dataset.</p>
-              </div>
-              <div className="analytics-grid">
-                <div className="analytics-card">
-                  <h3>Activity Calendar (Last 365 Days)</h3>
-                  <CalendarHeatmap />
-                </div>
-                <div className="analytics-card">
-                  <h3>Observed Activity vs. Historical Baseline</h3>
-                  <AnomalyChart current={displayStats.total_observations} />
-                </div>
-              </div>
-            </div>
+            <AnalyticsView fires={filteredFires} stats={displayStats} />
           )}
 
           {activeView === 'data' && (
@@ -291,45 +277,93 @@ function App() {
 
         {activeView === 'map' && (
           <aside className={`right-panel ${showRight ? 'open' : 'closed'}`}>
-            <div className="panel-header">
-              <h3>Detections</h3>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <select className="sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-                  <option value="frp">Highest FRP</option>
-                  <option value="confidence">Highest Confidence</option>
-                </select>
-                <span className="count-badge">{filteredFires.length}</span>
-              </div>
-            </div>
-
-            <div className="fire-list">
-              {filteredFires.length === 0 ? (
-                <div className="empty-state">No hotspots match this filter.</div>
-              ) : (
-                filteredFires.slice(0, 100).map((fire) => (
-                  <div
-                    role="button" tabIndex={0}
-                    className={`fire-card ${selectedFire?.id === fire.id ? 'selected' : ''}`}
-                    key={fire.id}
-                    onClick={() => setSelectedFire(fire)}
-                    onKeyDown={(e) => e.key === 'Enter' && setSelectedFire(fire)}
-                  >
-                    <div className="card-top">
-                      <h4>{fire.location}</h4>
-                      <span className={`sensor-tag ${fire.sensor.toLowerCase()}`}>{fire.sensor}</span>
+            {selectedFire ? (
+        
+              <div className="target-deep-dive">
+                <div className="panel-header">
+                  <h3>Target Details</h3>
+                  <button className="btn-secondary" onClick={() => setSelectedFire(null)}>Clear</button>
+                </div>
+                <div className="deep-dive-content">
+                  <div className="dd-location">{selectedFire.location}</div>
+                  <div className="dd-coords mono">{selectedFire.lat.toFixed(5)}, {selectedFire.lng.toFixed(5)}</div>
+                  
+                  <div className="dd-grid">
+                    <div className="dd-stat">
+                      <span className="dd-label">Sensor</span>
+                      <span className={`sensor-tag ${selectedFire.sensor.toLowerCase()}`}>{selectedFire.sensor}</span>
                     </div>
-                    <div className="card-mid" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span className="mono text-gray" style={{ fontSize: '0.75rem' }}>{fire.lat.toFixed(4)}, {fire.lng.toFixed(4)}</span>
-                      <button className="btn-text" onClick={(e) => { e.stopPropagation(); copyCoordinates(fire.lat, fire.lng); }}>Copy</button>
+                    <div className="dd-stat">
+                      <span className="dd-label">Confidence</span>
+                      <span className="dd-value">{selectedFire.confidence}%</span>
                     </div>
-                    <div className="card-bottom">
-                      <div className="telemetry-data"><span className="data-label">Confidence</span><span className="data-value">{fire.confidence}%</span></div>
-                      <div className="telemetry-data"><span className="data-label">Radiative Power</span><span className="data-value">{fire.frp} MW</span></div>
+                    <div className="dd-stat">
+                      <span className="dd-label">Radiative Power</span>
+                      <span className="dd-value text-orange">{selectedFire.frp} MW</span>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
+
+                  <div className="dd-actions">
+                    <button className="btn-primary" onClick={() => copyCoordinates(selectedFire.lat, selectedFire.lng)}>Copy Coordinates</button>
+                    <a 
+                      href={`https://www.google.com/maps/search/?api=1&query=${selectedFire.lat},${selectedFire.lng}`} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="btn-secondary"
+                      style={{ textDecoration: 'none', textAlign: 'center' }}
+                    >
+                      View on Google Maps
+                    </a>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              
+              <>
+                <div className="panel-header">
+                  <h3>Top Targets in View</h3> {/* Changed title */}
+                  <span className="count-badge">{filteredFires.length}</span>
+                </div>
+                <div className="fire-list">
+                  {filteredFires.length === 0 ? (
+                    <div className="empty-state">No hotspots match this filter.</div>
+                  ) : (
+                    // Filter by map bounds
+                    [...filteredFires]
+                      .filter(fire => {
+                        if (!mapBounds) return true; 
+                        return mapBounds.contains([fire.lat, fire.lng]);
+                      })
+                      .sort((a,b) => parseFloat(b.frp) - parseFloat(a.frp))
+                      .slice(0, 10)
+                      .map((fire, index) => (
+                      <div
+                        role="button" tabIndex={0}
+                        className={`fire-card priority-card ${selectedFire?.id === fire.id ? 'selected' : ''}`}
+                        key={fire.id}
+                        onClick={() => setSelectedFire(fire)}
+                        onKeyDown={(e) => e.key === 'Enter' && setSelectedFire(fire)}
+                      >
+                        <div className="card-top">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className="priority-rank">{index + 1}</span>
+                            <h4>{fire.location}</h4>
+                          </div>
+                          <span className={`sensor-tag ${fire.sensor.toLowerCase()}`}>{fire.sensor}</span>
+                        </div>
+                        <div className="card-bottom">
+                          <div className="telemetry-data"><span className="data-label">FRP</span><span className="data-value text-orange">{fire.frp} MW</span></div>
+                          <div className="telemetry-data"><span className="data-label">Conf</span><span className="data-value">{fire.confidence}%</span></div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <div style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '16px' }}>
+                    Showing top 10 highest intensity fires in your current map view.
+                  </div>
+                </div>
+              </>
+            )}
           </aside>
         )}
       </div>
