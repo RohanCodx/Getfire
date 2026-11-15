@@ -29,11 +29,24 @@ body {
   padding: 0 24px; height: 64px; border-bottom: 1px solid var(--border-color); 
   background: rgba(18, 18, 18, 0.8); backdrop-filter: blur(12px); z-index: 100;
 }
-.logo-area { display: flex; align-items: center; gap: 16px; }
+.brand-logo {
+  height: 100px;
+  width: auto;
+  object-fit: contain;
+  mix-blend-mode: screen;
+}
+.logo-area { 
+  display: flex; 
+  align-items: center; 
+  gap: 12px; 
+  flex: 1; 
+  justify-content: flex-start; 
+}
 .logo { font-weight: 700; font-size: 1rem; color: var(--text-primary); letter-spacing: -0.5px; }
 .nav-tabs { 
   display: flex; gap: 4px; background: rgba(255, 255, 255, 0.03); 
   padding: 4px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);
+  flex-shrink: 0;
 }
 .nav-tab { 
   background: transparent; border: none; color: var(--text-secondary); 
@@ -49,7 +62,7 @@ body {
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
 .status-indicator { 
-  display: flex; align-items: center; gap: 12px; 
+  display: flex; align-items: center; gap: 12px; flex: 1; justify-content: flex-end;
   background: rgba(255,255,255,0.03); padding: 6px 12px; border-radius: 20px; 
   border: 1px solid rgba(255,255,255,0.05);
 }
