@@ -1,4 +1,5 @@
 # GetFire 🔥
+<img width="1672" height="941" alt="file_00000000047482118bf46b13115b8f80" src="https://github.com/user-attachments/assets/6fe8ef11-dfde-45b8-b86f-e031430214ef" />
 
 **Explore burning activity across our planet through satellite
 observations.**
