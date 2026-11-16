@@ -95,19 +95,6 @@ categories. The intended processing workflow is:
 5.  **Visualize** results through the global map, calendar, and
     analytics views.
 
-### Data-source details to complete
-
-Before publishing a final release, document the exact datasets and
-access methods used by the running build:
-
--   NASA product / dataset names: **\[ADD EXACT DATASET NAMES\]**
--   Data access method or API: **\[ADD API / DOWNLOAD METHOD\]**
--   Temporal coverage: **\[ADD DATE RANGE\]**
--   Update frequency: **\[ADD UPDATE FREQUENCY\]**
--   Processing and filtering rules: **\[DESCRIBE YOUR IMPLEMENTATION\]**
-
-Do not assume that all displayed demo observations are live NASA data.
-
 ## Technology
 
 The current development setup indicates the following working stack.
