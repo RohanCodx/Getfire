@@ -10,9 +10,6 @@ satellite-detected active-fire observations into one accessible
 experience, helping users explore where burning is detected and how
 activity changes over time.
 
-> **Project status:** Prototype / hackathon project. The current map
-> screenshot shows demo data while the backend is offline. Demo markers
-> and outputs must not be treated as live fire alerts.
 
 ------------------------------------------------------------------------
 
@@ -67,8 +64,6 @@ fire-activity information and patterns.
 An export-data area is included in the interface for making data
 available outside the application, where implemented.
 
-> Feature availability may vary by build. Update this section as
-> features are fully connected to live data.
 
 ## Who Can Use GetFire?
 
@@ -179,7 +174,6 @@ or startup command, follow the backend source or project configuration.
 ## Project Structure
 
 The project has been developed with separate frontend and backend areas.
-A typical layout is:
 
 ``` text
 GetFire/
@@ -193,8 +187,6 @@ GetFire/
 └── README.md
 ```
 
-Adjust this tree to match the actual files and folders in your GitHub
-repository.
 
 ## Current Limitations
 
